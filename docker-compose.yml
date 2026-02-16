@@ -1,0 +1,24 @@
+services:
+  agora-web:
+    build:
+      context: .
+      args:
+        - VITE_AGORA_APP_ID=${VITE_AGORA_APP_ID}
+        - VITE_AGORA_TOKEN=${VITE_AGORA_TOKEN}
+        - VITE_AGORA_CUSTOMER_ID=${VITE_AGORA_CUSTOMER_ID}
+        - VITE_AGORA_CUSTOMER_SECRET=${VITE_AGORA_CUSTOMER_SECRET}
+        - VITE_LLM_API_KEY=${VITE_LLM_API_KEY}
+        - VITE_TTS_API_KEY=${VITE_TTS_API_KEY}
+        - VITE_TTS_REGION=${VITE_TTS_REGION}
+        - VITE_STT_API_KEY=${VITE_STT_API_KEY}
+        - VITE_AGENT_SYSTEM_PROMPT=${VITE_AGENT_SYSTEM_PROMPT}
+    container_name: agora-web
+    ports:
+      - "3100:80"
+    restart: unless-stopped
+    networks:
+      - n8n-network
+
+networks:
+  n8n-network:
+    external: true

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agora Voice Call</title>
+    <link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <header class="app-header">
+      <h1>🎧 Agora Voice Call</h1>
+      <div class="header-meta">
+        Your UID: <strong id="local-uid">—</strong>
+      </div>
+    </header>
+
+    <!-- Status bar -->
+    <div class="status-bar">
+      <span id="status-text" class="status-info">Disconnected</span>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls">
+      <div class="channel-input">
+        <label for="channel-input">Channel</label>
+        <input type="text" id="channel-input" value="test" placeholder="Channel name" />
+      </div>
+      <div class="btn-group">
+        <button id="btn-join" class="btn btn-join">📞 Join</button>
+        <button id="btn-mute" class="btn btn-mute" disabled>🎙️ Mute</button>
+        <button id="btn-leave" class="btn btn-leave" disabled>🚪 Leave</button>
+      </div>
+      <div class="btn-group">
+        <button id="btn-agent" class="btn btn-agent" disabled>🤖 Start Agent</button>
+      </div>
+    </div>
+
+    <!-- Users panel -->
+    <div class="users-panel">
+      <h2>Participants <span class="badge" id="user-count">0</span></h2>
+      <div id="users-list" class="users-list">
+        <div class="empty-state">No participants yet — click <strong>Join</strong> to connect.</div>
+      </div>
+    </div>
+
+    <!-- Hint -->
+    <p class="hint">💡 Open this page in another browser tab and join the same channel to simulate a second user. Or click <strong>Start Agent</strong> to invite an AI agent into the call.</p>
+
+    <!-- Event log -->
+    <details class="log-panel" open>
+      <summary>Event Log</summary>
+      <ul id="log-list"></ul>
+    </details>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
