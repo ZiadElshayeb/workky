@@ -10,6 +10,11 @@ let isJoined = false;
 let agentId = null;
 let isAgentRunning = false;
 
+// Single-agent lock key (shared across tabs via localStorage)
+const AGENT_LOCK_KEY = "agora_agent_active";
+const AGENT_ID_KEY = "agora_agent_id";
+const AGENT_CHANNEL_KEY = "agora_agent_channel";
+
 // Track remote users: { uid: { user, joinedAt } }
 const remoteUsers = {};
 
@@ -86,7 +91,9 @@ function createUserCard(id, isLocal) {
 
   const name = document.createElement("div");
   name.className = "user-name";
-  name.textContent = isLocal ? `You (UID: ${id})` : `User ${id}`;
+  // Show "Agora Agent" for the agent's UID (agent_rtc_uid "0" resolves to 0)
+  const isAgent = !isLocal && String(id) === "0";
+  name.textContent = isLocal ? `You (UID: ${id})` : isAgent ? "🤖 Agora Agent" : `User ${id}`;
 
   const detail = document.createElement("div");
   detail.className = "user-detail";
@@ -114,12 +121,22 @@ function updateControls() {
   $("#btn-mute").textContent = isMuted ? "🔇 Unmute" : "🎙️ Mute";
   $("#btn-mute").classList.toggle("muted", isMuted);
 
-  // Agent button
+  // Agent button – disable when another tab already started an agent
   const agentBtn = $("#btn-agent");
-  agentBtn.disabled = !isJoined;
+  const channel = $("#channel-input").value.trim() || "test";
+  const otherTabHasAgent =
+    !isAgentRunning &&
+    localStorage.getItem(AGENT_LOCK_KEY) === "true" &&
+    localStorage.getItem(AGENT_CHANNEL_KEY) === channel;
+
+  agentBtn.disabled = !isJoined || otherTabHasAgent;
+
   if (isAgentRunning) {
     agentBtn.textContent = "🛑 Stop Agent";
     agentBtn.classList.add("agent-running");
+  } else if (otherTabHasAgent) {
+    agentBtn.textContent = "🤖 Agent Active";
+    agentBtn.classList.remove("agent-running");
   } else {
     agentBtn.textContent = "🤖 Start Agent";
     agentBtn.classList.remove("agent-running");
@@ -254,16 +271,24 @@ async function startAgent() {
   }
 
   const channel = $("#channel-input").value.trim() || "test";
+
+  // ── Single-agent guard: prevent duplicate agents ──
+  const existingLock = localStorage.getItem(AGENT_LOCK_KEY);
+  const existingChannel = localStorage.getItem(AGENT_CHANNEL_KEY);
+  if (existingLock === "true" && existingChannel === channel) {
+    addLog("⚠️ An Agora Agent is already active in this channel.");
+    return;
+  }
+
   const base64Creds = btoa(`${cfg.customerId}:${cfg.customerSecret}`);
-  const uniqueName = `agent_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
 
   const body = {
-    name: uniqueName,
+    name: "Agora Agent",
     properties: {
       channel,
       token,
       agent_rtc_uid: "0",
-      remote_rtc_uids: [String(uid)],
+      remote_rtc_uids: ["all"],
       enable_string_uid: false,
       idle_timeout: 120,
       llm: {
@@ -324,7 +349,13 @@ async function startAgent() {
     const json = await res.json();
     agentId = json.agent_id;
     isAgentRunning = true;
-    addLog(`AI Agent started (ID: ${agentId})`);
+
+    // Persist the lock so other tabs / users see the agent is active
+    localStorage.setItem(AGENT_LOCK_KEY, "true");
+    localStorage.setItem(AGENT_ID_KEY, agentId);
+    localStorage.setItem(AGENT_CHANNEL_KEY, channel);
+
+    addLog(`Agora Agent started (ID: ${agentId})`);
     updateControls();
   } catch (err) {
     addLog(`❌ Agent start failed: ${err.message}`);
@@ -356,9 +387,15 @@ async function stopAgent() {
       throw new Error(`HTTP ${res.status}: ${errText}`);
     }
 
-    addLog(`AI Agent stopped (ID: ${agentId})`);
+    addLog(`Agora Agent stopped (ID: ${agentId})`);
     agentId = null;
     isAgentRunning = false;
+
+    // Release the global lock
+    localStorage.removeItem(AGENT_LOCK_KEY);
+    localStorage.removeItem(AGENT_ID_KEY);
+    localStorage.removeItem(AGENT_CHANNEL_KEY);
+
     updateControls();
   } catch (err) {
     addLog(`❌ Agent stop failed: ${err.message}`);
@@ -386,6 +423,13 @@ function startApp() {
   $("#btn-leave").onclick = leaveChannel;
   $("#btn-mute").onclick = toggleMute;
   $("#btn-agent").onclick = toggleAgent;
+
+  // Listen for lock changes from other tabs
+  window.addEventListener("storage", (e) => {
+    if (e.key === AGENT_LOCK_KEY || e.key === AGENT_CHANNEL_KEY) {
+      updateControls();
+    }
+  });
 
   updateControls();
   renderUsers();
