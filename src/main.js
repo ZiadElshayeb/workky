@@ -288,6 +288,7 @@ async function startAgent() {
       channel,
       token,
       agent_rtc_uid: "0",
+      remote_rtc_uids: [String(uid), ...Object.keys(remoteUsers)],
       enable_string_uid: false,
       idle_timeout: 120,
       llm: {
