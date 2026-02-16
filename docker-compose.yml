@@ -14,7 +14,7 @@ services:
         - VITE_AGENT_SYSTEM_PROMPT=${VITE_AGENT_SYSTEM_PROMPT}
     container_name: agora-web
     ports:
-      - "3100:80"
+      - "5000:5000"
     restart: unless-stopped
     networks:
       - n8n-network
