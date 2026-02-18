@@ -2,7 +2,8 @@ openai
 uvicorn
 fastapi
 aiofiles
-uuid
+aiohttp
+python-dotenv
 google-auth 
 google-auth-oauthlib 
 google-auth-httplib2 

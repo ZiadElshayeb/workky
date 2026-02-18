@@ -1,14 +1,13 @@
-# ── Stage 1: Build the Vite frontend (NO secrets needed) ─────────────
+# ── Stage 1: Build the Vite frontend ────────────────────────────────
 FROM node:20-alpine AS build
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
 RUN npm install
 COPY . .
-# The frontend build uses NO VITE_* secrets — everything is server-side
 RUN npm run build
 
-# ── Stage 2: Production image (backend + static frontend) ───────────
+# ── Stage 2: Production image (backend + static frontend) ────────────
 FROM node:20-alpine
 WORKDIR /app
 
@@ -22,8 +21,12 @@ COPY server/ ./server/
 # Copy built frontend from stage 1
 COPY --from=build /app/dist ./dist
 
-# Secrets are injected at RUNTIME via environment variables — never baked in
-# See docker-compose.yml (env_file: .env)
+# Ensure persistent data directories exist (volume mounted at runtime)
+RUN mkdir -p data tools
+
+# Secrets are injected at runtime via docker-compose env_file
+# CUSTOM_LLM_URL is overridden by docker-compose to point to the internal Python service
 
 EXPOSE 5000
+# Use plain node — env vars are provided by Docker, not --env-file
 CMD ["node", "server/server.js"]

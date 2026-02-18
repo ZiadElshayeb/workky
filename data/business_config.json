@@ -1,0 +1,94 @@
+{
+  "businessInfo": {
+    "name": "Classic Cuts Barbershop",
+    "description": "A traditional barbershop offering premium haircuts, beard trims, and grooming services",
+    "phone": "+1 (555) 123-4567",
+    "email": "info@classiccuts.com",
+    "address": "123 Main Street, Downtown, New York, NY 10001"
+  },
+  "services": [
+    {
+      "name": "Classic Haircut",
+      "duration": 30,
+      "price": 25,
+      "description": "Traditional scissor or clipper cut with styling"
+    },
+    {
+      "name": "Beard Trim & Shape",
+      "duration": 20,
+      "price": 15,
+      "description": "Precision beard shaping and trimming"
+    },
+    {
+      "name": "Haircut & Beard Combo",
+      "duration": 45,
+      "price": 35,
+      "description": "Full haircut plus beard trim package"
+    },
+    {
+      "name": "Kids Haircut",
+      "duration": 20,
+      "price": 18,
+      "description": "Haircut for children under 12"
+    },
+    {
+      "name": "Hot Towel Shave",
+      "duration": 30,
+      "price": 30,
+      "description": "Classic straight razor shave with hot towel treatment"
+    },
+    {
+      "name": "Hair Wash & Style",
+      "duration": 20,
+      "price": 20,
+      "description": "Shampoo, condition, blow-dry and style"
+    }
+  ],
+  "hours": {
+    "monday": {
+      "enabled": true,
+      "open": "09:00",
+      "close": "19:00"
+    },
+    "tuesday": {
+      "enabled": true,
+      "open": "09:00",
+      "close": "19:00"
+    },
+    "wednesday": {
+      "enabled": true,
+      "open": "09:00",
+      "close": "19:00"
+    },
+    "thursday": {
+      "enabled": true,
+      "open": "09:00",
+      "close": "19:00"
+    },
+    "friday": {
+      "enabled": true,
+      "open": "09:00",
+      "close": "19:00"
+    },
+    "saturday": {
+      "enabled": true,
+      "open": "10:00",
+      "close": "18:00"
+    },
+    "sunday": {
+      "enabled": false,
+      "open": "10:00",
+      "close": "16:00"
+    }
+  },
+  "bookingRules": {
+    "minNotice": 1,
+    "maxAdvance": 30,
+    "defaultDuration": 30,
+    "bufferTime": 5
+  },
+  "pricing": {
+    "currency": "USD",
+    "taxRate": 0
+  }
+}

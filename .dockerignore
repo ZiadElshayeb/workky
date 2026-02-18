@@ -1,5 +1,4 @@
 node_modules
-dist
 .env
 .env.local
 .env.*.local
@@ -7,3 +6,14 @@ dist
 .gitignore
 README.md
 *.md
+
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Runtime data (mounted as a shared Docker volume — not baked into image)
+data/

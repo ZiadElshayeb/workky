@@ -380,3 +380,451 @@ body {
 .config-field input:focus {
   border-color: var(--accent);
 }
+
+/* ═════════════════════════════════════════════════════════════════
+   PAGE LAYOUT
+   ═════════════════════════════════════════════════════════════════ */
+
+.page {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+/* ═════════════════════════════════════════════════════════════════
+   ONBOARDING WIZARD
+   ═════════════════════════════════════════════════════════════════ */
+
+.onboarding-container {
+  width: 100%;
+  max-width: 680px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.onboarding-header {
+  text-align: center;
+  padding: 1rem 0 0.5rem;
+}
+.onboarding-header h1 {
+  font-size: 2rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--accent), var(--green));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.onboarding-header .subtitle {
+  color: var(--text-dim);
+  font-size: 0.95rem;
+  margin-top: 0.25rem;
+}
+
+/* ─── Progress bar ─────────────────────────────────────────────── */
+.progress-bar {
+  height: 4px;
+  background: var(--surface2);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--green));
+  border-radius: 4px;
+  transition: width 0.4s ease;
+  width: 0%;
+}
+
+.step-indicators {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.25rem;
+}
+.step-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  flex: 1;
+}
+.step-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: var(--surface2);
+  color: var(--text-dim);
+  border: 2px solid var(--border);
+  transition: all 0.3s;
+}
+.step-indicator.active .step-dot {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.step-indicator.completed .step-dot {
+  background: var(--green);
+  color: #fff;
+  border-color: var(--green);
+}
+.step-label {
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+.step-indicator.active .step-label {
+  color: var(--accent);
+}
+
+/* ─── Wizard steps ─────────────────────────────────────────────── */
+.wizard-step {
+  display: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.5rem;
+  animation: fadeIn 0.3s ease;
+}
+.wizard-step.active {
+  display: block;
+}
+.wizard-step h2 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+.step-desc {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── Form grid ────────────────────────────────────────────────── */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.form-field.full-width {
+  grid-column: 1 / -1;
+}
+.form-field label {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.form-field input,
+.form-field textarea,
+.form-field select {
+  padding: 0.6rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  font-size: 0.9rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.form-field input:focus,
+.form-field textarea:focus,
+.form-field select:focus {
+  border-color: var(--accent);
+}
+.form-field textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+.form-field select {
+  cursor: pointer;
+}
+
+.input-error {
+  border-color: var(--red) !important;
+  animation: shake 0.4s;
+}
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-6px); }
+  75% { transform: translateX(6px); }
+}
+
+/* ─── Services ─────────────────────────────────────────────────── */
+.services-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+.service-row {
+  position: relative;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem;
+  padding-right: 2.5rem;
+}
+.service-grid {
+  gap: 0.5rem !important;
+}
+.btn-remove-service {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  background: none;
+  border: none;
+  color: var(--red);
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+.btn-remove-service:hover {
+  background: rgba(248, 113, 113, 0.15);
+}
+
+/* ─── Hours grid ───────────────────────────────────────────────── */
+.hours-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.hours-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.85rem;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.day-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 130px;
+  cursor: pointer;
+}
+.day-toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.day-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.hours-times {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 1;
+}
+.hours-times input[type="time"] {
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.85rem;
+  outline: none;
+}
+.hours-times input[type="time"]:focus {
+  border-color: var(--accent);
+}
+.hours-sep {
+  color: var(--text-dim);
+  font-size: 0.8rem;
+}
+
+/* ─── Calendar connect ─────────────────────────────────────────── */
+.calendar-connect-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 2rem;
+  background: var(--surface2);
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  text-align: center;
+}
+.calendar-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+}
+.calendar-icon {
+  font-size: 2rem;
+}
+.calendar-status .connected {
+  color: var(--green);
+}
+.calendar-status .error {
+  color: var(--red);
+}
+.calendar-hint {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  max-width: 360px;
+}
+
+/* ─── Google button ────────────────────────────────────────────── */
+.btn-google {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.75rem 1.5rem;
+  background: #fff;
+  color: #3c4043;
+  border: 1px solid #dadce0;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.2s, box-shadow 0.2s;
+}
+.btn-google:hover:not(:disabled) {
+  background: #f8f9fa;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+}
+.btn-google:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.btn-google.btn-connected {
+  background: #e8f5e9;
+  border-color: var(--green);
+  color: #2e7d32;
+}
+.google-icon {
+  flex-shrink: 0;
+}
+
+/* ─── Wizard navigation ───────────────────────────────────────── */
+.wizard-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  padding: 0.65rem 1.5rem;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.btn-primary.btn-success {
+  background: var(--green);
+}
+.btn-primary.btn-success:hover:not(:disabled) {
+  background: #2bc48a;
+}
+
+.btn-secondary {
+  background: var(--surface2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 0.65rem 1.5rem;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.btn-secondary:hover:not(:disabled) {
+  background: var(--border);
+}
+.btn-secondary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-outline {
+  background: transparent;
+  color: var(--accent);
+  border: 1px dashed var(--accent);
+  padding: 0.55rem 1rem;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.btn-outline:hover {
+  background: rgba(108, 99, 255, 0.1);
+}
+
+.btn-small {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+}
+
+/* ─── Agent page header ───────────────────────────────────────── */
+.biz-name-display {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+@media (max-width: 480px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+  .form-field.full-width {
+    grid-column: 1;
+  }
+  .hours-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .day-toggle {
+    min-width: auto;
+  }
+  .step-label {
+    display: none;
+  }
+  .wizard-nav {
+    flex-direction: column;
+  }
+  .header-actions {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.25rem;
+  }
+}

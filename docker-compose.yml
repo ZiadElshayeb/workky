@@ -1,19 +1,61 @@
 services:
-  agora-web:
+
+  # ── Python FastAPI — Custom LLM + Google Calendar tools ──────────────
+  custom-llm:
     build:
       context: .
-      # NO build args — secrets are runtime-only
-    container_name: agora-web
+      dockerfile: custom_llm/Dockerfile
+    container_name: workky-custom-llm
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      # Posts log events back to the Node service using its compose service name
+      - AGENT_LOG_URL=http://workky-web:5000/api/agent-log
+    volumes:
+      # shared data volume — both services read/write business_config.json and token.json
+      - workky-data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/docs')"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - workky-internal
+    # NOT exposed to the host — only the Node service calls it internally
+
+  # ── Node.js — Express backend + Vite-built frontend ──────────────────
+  workky-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: workky-web
     env_file:
       - .env
     environment:
       - PORT=5000
+      # Internal URL to the Python service (compose service name = custom-llm)
+      - CUSTOM_LLM_URL=http://custom-llm:8000/chat/completions
+    volumes:
+      # Same shared volume so Node can write token.json and Python can read it
+      - workky-data:/app/data
     ports:
       - "5001:5000"
+    depends_on:
+      custom-llm:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - n8n-network
+      - workky-internal
+
+volumes:
+  workky-data:
 
 networks:
   n8n-network:
     external: true
+  workky-internal:
+    driver: bridge
