@@ -18,18 +18,14 @@ const AGENT_CHANNEL_KEY = "agora_agent_channel";
 // Track remote users: { uid: { user, joinedAt } }
 const remoteUsers = {};
 
-// Connection parameters (loaded from .env via Vite)
-const appId = import.meta.env.VITE_AGORA_APP_ID;
-const token = import.meta.env.VITE_AGORA_TOKEN;
+// ─── Backend API base URL ────────────────────────────────────────────
+// In production the backend serves the frontend, so "" (same origin) works.
+// During dev, Vite proxies /api → the backend (see vite.config.js).
+const API_BASE = "";
 
-// Conversational AI Agent credentials
-const AGENT_CUSTOMER_ID = import.meta.env.VITE_AGORA_CUSTOMER_ID;
-const AGENT_CUSTOMER_SECRET = import.meta.env.VITE_AGORA_CUSTOMER_SECRET;
-const AGENT_LLM_API_KEY = import.meta.env.VITE_LLM_API_KEY;
-const AGENT_TTS_API_KEY = import.meta.env.VITE_TTS_API_KEY;
-const AGENT_STT_API_KEY = import.meta.env.VITE_STT_API_KEY;
-const AGENT_TTS_REGION = import.meta.env.VITE_TTS_REGION || "eastus";
-const AGENT_SYSTEM_PROMPT = import.meta.env.VITE_AGENT_SYSTEM_PROMPT || "You are a helpful chatbot.";
+// Connection parameters – fetched from backend at runtime (no secrets here)
+let appId = null;
+let token = null;
 
 // Generate a random UID so every tab is a different user
 const uid = Math.floor(Math.random() * 100000);
@@ -241,35 +237,9 @@ function toggleMute() {
   renderUsers();
 }
 
-// ─── Conversational AI Agent ─────────────────────────────────────────
-function getAgentConfig() {
-  return {
-    customerId: AGENT_CUSTOMER_ID,
-    customerSecret: AGENT_CUSTOMER_SECRET,
-    asrApiKey: AGENT_STT_API_KEY,
-    llmApiKey: AGENT_LLM_API_KEY,
-    ttsApiKey: AGENT_TTS_API_KEY,
-    ttsRegion: AGENT_TTS_REGION,
-    systemPrompt: AGENT_SYSTEM_PROMPT,
-  };
-}
+// ─── Conversational AI Agent (all secrets stay on the backend) ───────
 
 async function startAgent() {
-  const cfg = getAgentConfig();
-
-  if (!cfg.customerId || !cfg.customerSecret) {
-    addLog("❌ Missing Agora Customer ID / Secret — expand AI Agent Configuration");
-    return;
-  }
-  if (!cfg.llmApiKey) {
-    addLog("❌ Missing LLM API Key — expand AI Agent Configuration");
-    return;
-  }
-  if (!cfg.ttsApiKey) {
-    addLog("❌ Missing TTS API Key — expand AI Agent Configuration");
-    return;
-  }
-
   const channel = $("#channel-input").value.trim() || "test";
 
   // ── Single-agent guard: prevent duplicate agents ──
@@ -280,77 +250,28 @@ async function startAgent() {
     return;
   }
 
-  const base64Creds = btoa(`${cfg.customerId}:${cfg.customerSecret}`);
-
-  const body = {
-    name: "Agora Agent",
-    properties: {
-      channel,
-      token,
-      agent_rtc_uid: "0",
-      remote_rtc_uids: [String(uid), ...Object.keys(remoteUsers)],
-      enable_string_uid: false,
-      idle_timeout: 120,
-      llm: {
-        url: "https://api.openai.com/v1/chat/completions",
-        api_key: cfg.llmApiKey,
-        system_messages: [
-          { role: "system", content: cfg.systemPrompt },
-        ],
-        greeting_message: "Hello, how can I help you?",
-        failure_message: "Sorry, I don't know how to answer this question.",
-        max_history: 10,
-        params: { model: "gpt-4o-mini" },
-      },
-      asr: {
-          "vendor": "deepgram",
-          "params": {
-            "url": "wss://api.deepgram.com/v1/listen",
-            "key": cfg.asrApiKey,
-            "model": "nova-3",
-            "language": "en",
-            "keyterm": "term1%20term2"
-          }
-      }
-,
-      tts: {
-        "vendor": "openai",
-        "params": {
-          "base_url": "https://api.openai.com/v1",
-          "api_key": cfg.ttsApiKey,
-          "model": "tts-1",
-          "voice": "coral",
-          "instructions": "Please use standard American English, natural tone, moderate pace, and steady intonation",
-          "speed": 1
-        }
-      }
-    }
-  };
-
   try {
     addLog("Starting AI agent…");
-    const res = await fetch(
-      `https://api.agora.io/api/conversational-ai-agent/v2/projects/${appId}/join`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Basic ${base64Creds}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
-      }
-    );
+    const res = await fetch(`${API_BASE}/api/start-agent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        channel,
+        uid,
+        remoteUids: Object.keys(remoteUsers),
+      }),
+    });
 
     if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`HTTP ${res.status}: ${errText}`);
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error(errBody.error || `HTTP ${res.status}`);
     }
 
     const json = await res.json();
     agentId = json.agent_id;
     isAgentRunning = true;
 
-    // Persist the lock so other tabs / users see the agent is active
+    // Persist the lock so other tabs see the agent is active
     localStorage.setItem(AGENT_LOCK_KEY, "true");
     localStorage.setItem(AGENT_ID_KEY, agentId);
     localStorage.setItem(AGENT_CHANNEL_KEY, channel);
@@ -366,25 +287,17 @@ async function startAgent() {
 async function stopAgent() {
   if (!agentId) return;
 
-  const cfg = getAgentConfig();
-  const base64Creds = btoa(`${cfg.customerId}:${cfg.customerSecret}`);
-
   try {
     addLog("Stopping AI agent…");
-    const res = await fetch(
-      `https://api.agora.io/api/conversational-ai-agent/v2/projects/${appId}/agents/${agentId}/leave`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Basic ${base64Creds}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
+    const res = await fetch(`${API_BASE}/api/stop-agent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ agentId }),
+    });
 
     if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`HTTP ${res.status}: ${errText}`);
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error(errBody.error || `HTTP ${res.status}`);
     }
 
     addLog(`Agora Agent stopped (ID: ${agentId})`);
@@ -412,7 +325,37 @@ async function toggleAgent() {
 }
 
 // ─── Bootstrap ───────────────────────────────────────────────────────
-function startApp() {
+
+/**
+ * Clear stale agent locks from localStorage.
+ * If a previous tab/session set the lock but never cleaned it up
+ * (e.g. browser crash, tab closed), the button stays permanently disabled.
+ * We clear the lock on every fresh page load so the user can start a new agent.
+ */
+function clearStaleAgentLock() {
+  localStorage.removeItem(AGENT_LOCK_KEY);
+  localStorage.removeItem(AGENT_ID_KEY);
+  localStorage.removeItem(AGENT_CHANNEL_KEY);
+}
+
+async function startApp() {
+  // Clear any orphaned agent lock from a previous session
+  clearStaleAgentLock();
+
+  // Fetch session config from backend (appId + token, no secrets)
+  try {
+    const res = await fetch(`${API_BASE}/api/session`, { method: "POST" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const session = await res.json();
+    appId = session.appId;
+    token = session.token;
+  } catch (err) {
+    setStatus("Cannot reach backend", "error");
+    addLog(`❌ Backend unreachable: ${err.message}`);
+    console.error(err);
+    return;
+  }
+
   initializeClient();
 
   // Show the random UID in the header
@@ -428,6 +371,15 @@ function startApp() {
   window.addEventListener("storage", (e) => {
     if (e.key === AGENT_LOCK_KEY || e.key === AGENT_CHANNEL_KEY) {
       updateControls();
+    }
+  });
+
+  // Clean up the agent lock if this tab is closed while the agent is running
+  window.addEventListener("beforeunload", () => {
+    if (isAgentRunning) {
+      localStorage.removeItem(AGENT_LOCK_KEY);
+      localStorage.removeItem(AGENT_ID_KEY);
+      localStorage.removeItem(AGENT_CHANNEL_KEY);
     }
   });
 

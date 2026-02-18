@@ -1,30 +1,29 @@
-# Build stage
+# ── Stage 1: Build the Vite frontend (NO secrets needed) ─────────────
 FROM node:20-alpine AS build
 WORKDIR /app
-
-# Declare build args — Vite bakes VITE_* into the bundle at build time
-ARG VITE_AGORA_APP_ID
-ARG VITE_AGORA_TOKEN
-ARG VITE_AGORA_CUSTOMER_ID
-ARG VITE_AGORA_CUSTOMER_SECRET
-ARG VITE_LLM_API_KEY
-ARG VITE_TTS_API_KEY
-ARG VITE_TTS_REGION
-ARG VITE_STT_API_KEY
-ARG VITE_AGENT_SYSTEM_PROMPT
 
 COPY package.json package-lock.json* ./
 RUN npm install
 COPY . .
+# The frontend build uses NO VITE_* secrets — everything is server-side
 RUN npm run build
 
-# Production stage
+# ── Stage 2: Production image (backend + static frontend) ───────────
 FROM node:20-alpine
 WORKDIR /app
-COPY --from=build /app /app
 
-# Expose port
+# Copy package files and install production deps only
+COPY package.json package-lock.json* ./
+RUN npm install --omit=dev
+
+# Copy backend server code
+COPY server/ ./server/
+
+# Copy built frontend from stage 1
+COPY --from=build /app/dist ./dist
+
+# Secrets are injected at RUNTIME via environment variables — never baked in
+# See docker-compose.yml (env_file: .env)
+
 EXPOSE 5000
-
-# Run the preview server
-CMD ["npx", "vite", "preview", "--host", "0.0.0.0", "--port", "5000"]
+CMD ["node", "server/server.js"]
