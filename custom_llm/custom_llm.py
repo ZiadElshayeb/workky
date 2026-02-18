@@ -248,155 +248,126 @@ async def create_chat_completion(request: ChatCompletionRequest):
         if request.tools:
             all_tools.extend([t.model_dump() for t in request.tools])
 
-        response = await client.chat.completions.create(
+        # ── Phase 1: NON-streaming call to detect tool use BEFORE yielding anything ──
+        # This guarantees the waiting message is the very first thing Agora receives
+        # when tool calls are involved. A streaming first call creates a race condition
+        # where tool-call fragments and text chunks get batched together.
+        first_response = await client.chat.completions.create(
             model=request.model,
             messages=serialized_messages,
             tools=all_tools,
             tool_choice="auto",
-            stream=True,
+            stream=False,
         )
 
         async def generate():
             try:
-                collected_tool_calls = {}
-                is_tool_call = False
-                waiting_message_sent = False
-                # Buffer text chunks — only flush them once we know no tool call is coming.
-                # If the model generates text BEFORE a tool call (narrating what it's about to do),
-                # we discard that buffer so the customer never hears it.
-                text_buffer = []
+                choice = first_response.choices[0]
+                tool_calls = choice.message.tool_calls  # None or list
 
-                async for chunk in response:
-                    choices = chunk.choices
-                    if not choices:
-                        continue
+                if not tool_calls:
+                    # ── No tool calls: stream a fresh call so Agora gets low-latency text ──
+                    stream_resp = await client.chat.completions.create(
+                        model=request.model,
+                        messages=serialized_messages,
+                        stream=True,
+                    )
+                    async for chunk in stream_resp:
+                        yield f"data: {json.dumps(chunk.to_dict())}\n\n"
+                    yield "data: [DONE]\n\n"
+                    return
 
-                    delta = choices[0].delta
-                    finish_reason = choices[0].finish_reason
+                # ── Tool calls detected ───────────────────────────────────────────────
+                # Step 1: yield the waiting message as the ONLY thing Agora sees right now.
+                first_tool_name = tool_calls[0].function.name if tool_calls else "_default"
+                yield create_waiting_chunk(get_waiting_message(first_tool_name), request.model)
+                # Force a network flush by yielding a comment line, then sleep so Agora's
+                # TTS has time to synthesize and START speaking before the answer arrives.
+                yield ": heartbeat\n\n"
+                await asyncio.sleep(3)
 
-                    if delta and delta.tool_calls:
-                        # Accumulate streamed tool call fragments
-                        is_tool_call = True
-                        # Discard any buffered text — it was the model narrating the tool call
-                        text_buffer.clear()
+                # Step 2: execute every tool call
+                tool_result_messages = []
+                for tc in tool_calls:
+                    func_name = tc.function.name
+                    try:
+                        arguments = json.loads(tc.function.arguments)
+                    except (json.JSONDecodeError, KeyError):
+                        arguments = {}
 
-                        # Send waiting message immediately on the FIRST tool call fragment
-                        if not waiting_message_sent:
-                            waiting_message_sent = True
-                            # Determine tool name from the first fragment that has it
-                            first_tool_name = "_default"
-                            for tc in delta.tool_calls:
-                                if tc.function and tc.function.name:
-                                    first_tool_name = tc.function.name
-                                    break
-                            yield create_waiting_chunk(get_waiting_message(first_tool_name), request.model)
-                            # Flush the waiting text as its own packet BEFORE the stop signal.
-                            # Without this sleep both chunks arrive in the same TCP frame and
-                            # Agora processes the stop before feeding the text to TTS.
-                            # await asyncio.sleep(0.3)
-                            # yield create_stop_chunk(request.model)
-                            # Wait long enough for Agora TTS to finish speaking the waiting message
-                            # before the tool result arrives and triggers the next response.
-                            await asyncio.sleep(3)
-                        for tc in delta.tool_calls:
-                            idx = tc.index
-                            if idx not in collected_tool_calls:
-                                collected_tool_calls[idx] = {
-                                    "id": "",
-                                    "type": "function",
-                                    "function": {"name": "", "arguments": ""}
-                                }
-                            if tc.id:
-                                collected_tool_calls[idx]["id"] = tc.id
-                            if tc.function:
-                                if tc.function.name:
-                                    collected_tool_calls[idx]["function"]["name"] += tc.function.name
-                                if tc.function.arguments:
-                                    collected_tool_calls[idx]["function"]["arguments"] += tc.function.arguments
-                    elif not is_tool_call:
-                        # Buffer regular text — don't yield yet
-                        text_buffer.append(f"data: {json.dumps(chunk.to_dict())}\n\n")
+                    # ── Log tool START to frontend ──────────────────────────────
+                    tool_label = {
+                        "check_availability": "📅 Checking calendar availability",
+                        "book_appointment":   "📝 Booking appointment",
+                        "delete_appointment": "🗑️ Cancelling appointment",
+                    }.get(func_name, f"🔧 Running {func_name}")
+                    await post_agent_log("tool_start", {
+                        "tool": func_name, "label": tool_label, "args": arguments,
+                    })
 
-                    if finish_reason == "stop" and not is_tool_call:
-                        # Normal text response — flush the buffer now
-                        for buffered in text_buffer:
-                            yield buffered
-                        text_buffer.clear()
+                    logger.info(f"Executing tool: {func_name} with args: {arguments}")
+                    result = execute_tool(func_name, arguments)
+                    logger.info(f"Tool result: {result[:200]}")
 
-                    if finish_reason == "tool_calls":
-                        tool_calls_list = list(collected_tool_calls.values())
+                    # ── Log tool RESULT to frontend ─────────────────────────────
+                    try:
+                        result_data = json.loads(result)
+                        if result_data.get("success"):
+                            outcome_label = result_data.get("message", "Done")
+                            outcome_type = "tool_success"
+                        elif result_data.get("error"):
+                            outcome_label = f"Error: {result_data['error']}"
+                            outcome_type = "tool_error"
+                        elif result_data.get("available") is not None:
+                            slots = result_data.get("total_slots", 0)
+                            outcome_label = f"Found {slots} available slot(s)"
+                            outcome_type = "tool_success"
+                        else:
+                            outcome_label = "Completed"
+                            outcome_type = "tool_success"
+                    except Exception:
+                        outcome_label = "Completed"
+                        outcome_type = "tool_success"
 
-                        # Execute each tool
-                        tool_result_messages = []
-                        for tc in tool_calls_list:
-                            func_name = tc["function"]["name"]
-                            try:
-                                arguments = json.loads(tc["function"]["arguments"])
-                            except (json.JSONDecodeError, KeyError):
-                                arguments = {}
+                    await post_agent_log(outcome_type, {
+                        "tool": func_name, "label": outcome_label,
+                    })
 
-                            # ── Log tool START to frontend ──────────────────
-                            tool_label = {
-                                "check_availability": "📅 Checking calendar availability",
-                                "book_appointment": "📝 Booking appointment",
-                                "delete_appointment": "🗑️ Cancelling appointment",
-                            }.get(func_name, f"🔧 Running {func_name}")
-                            await post_agent_log("tool_start", {
-                                "tool": func_name,
-                                "label": tool_label,
-                                "args": arguments,
-                            })
+                    tool_result_messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "content": result,
+                    })
 
-                            logger.info(f"Executing tool: {func_name} with args: {arguments}")
-                            result = execute_tool(func_name, arguments)
-                            logger.info(f"Tool result: {result[:200]}")
+                # Step 3: stream the follow-up answer
+                follow_up_messages = serialized_messages + [
+                    {
+                        "role": "assistant",
+                        "content": None,
+                        "tool_calls": [
+                            {
+                                "id": tc.id,
+                                "type": "function",
+                                "function": {
+                                    "name": tc.function.name,
+                                    "arguments": tc.function.arguments,
+                                },
+                            }
+                            for tc in tool_calls
+                        ],
+                    }
+                ] + tool_result_messages
 
-                            # ── Log tool RESULT to frontend ─────────────────
-                            try:
-                                result_data = json.loads(result)
-                                if result_data.get("success"):
-                                    outcome_label = result_data.get("message", "Done")
-                                    outcome_type = "tool_success"
-                                elif result_data.get("error"):
-                                    outcome_label = f"Error: {result_data['error']}"
-                                    outcome_type = "tool_error"
-                                elif result_data.get("available") is not None:
-                                    slots = result_data.get("total_slots", 0)
-                                    outcome_label = f"Found {slots} available slot(s)"
-                                    outcome_type = "tool_success"
-                                else:
-                                    outcome_label = "Completed"
-                                    outcome_type = "tool_success"
-                            except Exception:
-                                outcome_label = "Completed"
-                                outcome_type = "tool_success"
-
-                            await post_agent_log(outcome_type, {
-                                "tool": func_name,
-                                "label": outcome_label,
-                            })
-
-                            tool_result_messages.append({
-                                "role": "tool",
-                                "tool_call_id": tc["id"],
-                                "content": result,
-                            })
-
-                        # Rebuild full message history for the follow-up call
-                        follow_up_messages = serialized_messages + [
-                            {"role": "assistant", "content": None, "tool_calls": tool_calls_list}
-                        ] + tool_result_messages
-
-                        # Second call — plain text answer, no tools
-                        second_response = await client.chat.completions.create(
-                            model=request.model,
-                            messages=follow_up_messages,
-                            stream=True,
-                        )
-                        async for chunk2 in second_response:
-                            yield f"data: {json.dumps(chunk2.to_dict())}\n\n"
+                second_response = await client.chat.completions.create(
+                    model=request.model,
+                    messages=follow_up_messages,
+                    stream=True,
+                )
+                async for chunk2 in second_response:
+                    yield f"data: {json.dumps(chunk2.to_dict())}\n\n"
 
                 yield "data: [DONE]\n\n"
+
             except asyncio.CancelledError:
                 logger.info("Request was cancelled")
                 raise
@@ -410,65 +381,6 @@ async def create_chat_completion(request: ChatCompletionRequest):
         error_message = f"{str(e)}\n{traceback_str}"
         logger.error(error_message)
         raise HTTPException(status_code=500, detail=error_message)
-
-###########################################################################################
-
-# @app.post("/chat/completions")
-# async def create_chat_completion(request: ChatCompletionRequest):
-#     try:
-#         logger.info(f"Received request: {request.model_dump_json()}")
-
-#         if not request.stream:
-#             raise HTTPException(status_code=400, detail="chat completions require streaming")
-
-#         base_url = os.getenv("LLM_BASE_URL")
-#         api_key = os.getenv("LLM_API_KEY")
-#         client = AsyncOpenAI(base_url=base_url, api_key=api_key)
-
-#         # Serialize Pydantic messages to plain dicts — required by the OpenAI client
-#         serialized_messages = [msg.model_dump(exclude_none=True) for msg in request.messages]
-
-#         # Build params dict, only including optional fields when they have actual values
-#         params = {
-#             "model": request.model,
-#             "messages": serialized_messages,
-#             "stream": True,
-#         }
-#         if request.tools:
-#             params["tools"] = [t.model_dump() for t in request.tools]
-#             if request.tool_choice:
-#                 params["tool_choice"] = request.tool_choice if isinstance(request.tool_choice, str) else request.tool_choice.model_dump()
-#         if request.response_format:
-#             params["response_format"] = request.response_format.model_dump()
-#         if request.stream_options:
-#             params["stream_options"] = request.stream_options
-#         if request.audio:
-#             params["audio"] = request.audio
-#             params["modalities"] = request.modalities
-
-#         response = await client.chat.completions.create(**params)
-
-#         async def generate():
-#             try:
-#                 async for chunk in response:
-#                     logger.debug(f"Received chunk: {chunk}")
-#                     yield f"data: {json.dumps(chunk.to_dict())}\n\n"
-#                 yield "data: [DONE]\n\n"
-#             except asyncio.CancelledError:
-#                 logger.info("Request was cancelled")
-#                 raise
-
-#         return StreamingResponse(generate(), media_type="text/event-stream")
-#     except asyncio.CancelledError:
-#         logger.info("Request was cancelled")
-#         raise HTTPException(status_code=499, detail="Request was cancelled")
-#     except Exception as e:
-#         traceback_str = "".join(traceback.format_tb(e.__traceback__))
-#         error_message = f"{str(e)}\n{traceback_str}"
-#         logger.error(error_message)
-#         raise HTTPException(status_code=500, detail=error_message)
-
-###########################################################################################
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
