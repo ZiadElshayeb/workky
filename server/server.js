@@ -530,14 +530,14 @@ app.post("/api/start-agent", async (req, res) => {
           },
         },
         "tts": {
-          "vendor": "openai",
+          "vendor": "elevenlabs",
           "params": {
-            "base_url": "https://api.openai.com/v1",
-            "api_key": TTS_API_KEY,
-            "model": "tts-1",
-            "voice": "coral",
-            "instructions": "Please use standard American English, natural tone, moderate pace, and steady intonation",
-            "speed": 1
+            "base_url": "wss://api.elevenlabs.io/v1",
+            "key": TTS_API_KEY,
+            "model_id": "eleven_flash_v2_5",
+            "voice_id": "EST9Ui6982FZPSi7gCHi",
+            "sample_rate": 24000,
+            "use_speaker_boost": true
           }
         },
       },
