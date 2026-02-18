@@ -260,6 +260,7 @@ async def create_chat_completion(request: ChatCompletionRequest):
             try:
                 collected_tool_calls = {}
                 is_tool_call = False
+                waiting_message_sent = False
                 # Buffer text chunks — only flush them once we know no tool call is coming.
                 # If the model generates text BEFORE a tool call (narrating what it's about to do),
                 # we discard that buffer so the customer never hears it.
@@ -278,6 +279,19 @@ async def create_chat_completion(request: ChatCompletionRequest):
                         is_tool_call = True
                         # Discard any buffered text — it was the model narrating the tool call
                         text_buffer.clear()
+
+                        # Send waiting message immediately on the FIRST tool call fragment
+                        if not waiting_message_sent:
+                            waiting_message_sent = True
+                            # Determine tool name from the first fragment that has it
+                            first_tool_name = "_default"
+                            for tc in delta.tool_calls:
+                                if tc.function and tc.function.name:
+                                    first_tool_name = tc.function.name
+                                    break
+                            yield create_waiting_chunk(get_waiting_message(first_tool_name), request.model)
+                            yield create_stop_chunk(request.model)
+                            await asyncio.sleep(0.1)
                         for tc in delta.tool_calls:
                             idx = tc.index
                             if idx not in collected_tool_calls:
@@ -305,16 +319,6 @@ async def create_chat_completion(request: ChatCompletionRequest):
 
                     if finish_reason == "tool_calls":
                         tool_calls_list = list(collected_tool_calls.values())
-
-                        # Pick waiting message based on the first tool being called
-                        first_tool_name = (
-                            tool_calls_list[0]["function"]["name"]
-                            if tool_calls_list else "_default"
-                        )
-                        yield create_waiting_chunk(get_waiting_message(first_tool_name), request.model)
-                        # Send stop chunk so Agora TTS flushes and speaks the waiting message
-                        yield create_stop_chunk(request.model)
-                        await asyncio.sleep(3)
 
                         # Execute each tool
                         tool_result_messages = []

@@ -93,7 +93,7 @@ function buildSystemPrompt(config) {
   // ── Identity ───────────────────────────────────────────────────────
   let p = `You are ${biz.name}'s AI receptionist. Your job is to answer questions about the business and manage appointments on the owner's behalf.`;
   if (biz.description) p += ` The business is: ${biz.description}.`;
-  p += `\n\n## Current Date & Time\nToday is ${currentDate}. The current time is ${currentTime}. Use this when reasoning about appointment dates, availability, and scheduling.`;
+  p += `\n\n## Current Date & Time\nToday is ${currentDate} and the current time is ${currentTime}. Always refer to today by its full name (e.g., "this Friday" or "today, Wednesday") when discussing dates with the caller. Use this when reasoning about appointment dates, availability, and scheduling.`;
 
   // ── Contact info ───────────────────────────────────────────────────
   p += `\n\n## Business Details`;
