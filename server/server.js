@@ -143,9 +143,11 @@ function buildSystemPrompt(config) {
   p += `\n  2. Ask for their preferred date.`;
   p += `\n  3. Silently look up availability, then tell the caller which time slots are open.`;
   p += `\n  4. Confirm the chosen time with the caller.`;
-  p += `\n  5. Ask for their full name and phone number.`;
-  p += `\n  6. Silently create the booking, then confirm the appointment details to the caller.`;
-  p += `\n  7. Read back the confirmed date, time, and service naturally — like "Perfect, you're all set for Tuesday the 24th at 10 AM for a Classic Haircut."`;
+  p += `\n  5. Ask for their full name. Wait for their answer.`;
+  p += `\n  6. Ask for their phone number. Wait for their answer.`;
+  p += `\n  7. ONLY after you have BOTH the full name AND phone number, silently create the booking.`;
+  p += `\n  8. Confirm the appointment details: "Perfect, you're all set for [day] at [time] for [service] — see you then!"`;
+  p += `\n  CRITICAL: Never call book_appointment if you are missing either the customer's name or phone number. Ask for the missing piece first.`;
   p += `\nWhen a caller wants to CANCEL an appointment:`;
   p += `\n  1. Ask for their name and the date of the appointment.`;
   p += `\n  2. Silently find and remove it, then confirm the cancellation conversationally.`;

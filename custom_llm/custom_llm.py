@@ -291,7 +291,9 @@ async def create_chat_completion(request: ChatCompletionRequest):
                                     break
                             yield create_waiting_chunk(get_waiting_message(first_tool_name), request.model)
                             yield create_stop_chunk(request.model)
-                            await asyncio.sleep(0.1)
+                            # Wait long enough for Agora TTS to finish speaking the waiting message
+                            # before the tool result arrives and triggers the next response.
+                            await asyncio.sleep(4)
                         for tc in delta.tool_calls:
                             idx = tc.index
                             if idx not in collected_tool_calls:

@@ -376,6 +376,32 @@ def book_appointment(
             "error": f"Appointments can only be booked up to {max_advance_days} days in advance.",
         })
 
+    # ── Duplicate check: reject if a booking already exists at this exact slot ──
+    try:
+        conflict_result = (
+            cal_service.events()
+            .list(
+                calendarId="primary",
+                timeMin=start_dt.isoformat(),
+                timeMax=end_dt.isoformat(),
+                singleEvents=True,
+            )
+            .execute()
+        )
+        conflicts = conflict_result.get("items", [])
+        if conflicts:
+            names = ", ".join(
+                e.get("summary", "existing appointment") for e in conflicts
+            )
+            return json.dumps({
+                "error": (
+                    f"That time slot is already booked ({names}). "
+                    "Please choose a different time."
+                ),
+            })
+    except HttpError as e:
+        return json.dumps({"error": f"Failed to check for conflicts: {str(e)}"})
+
     # Build event description
     description_parts = [
         f"Service: {service_name}",
