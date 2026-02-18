@@ -1,17 +1,23 @@
 {
   "name": "agora_web_quickstart",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently \"vite\" \"node --env-file=.env server/server.js\"",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "node --env-file=.env server/server.js",
+    "check-leaks": "node scripts/check-leaks.js"
   },
   "devDependencies": {
+    "concurrently": "^9.1.2",
     "vite": "^7.3.1"
   },
   "dependencies": {
-    "agora-rtc-sdk-ng": "^4.24.2"
+    "agora-rtc-sdk-ng": "^4.24.2",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.0"
   }
 }
