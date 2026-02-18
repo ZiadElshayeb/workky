@@ -289,7 +289,7 @@ async def create_chat_completion(request: ChatCompletionRequest):
                                 if tc.function and tc.function.name:
                                     first_tool_name = tc.function.name
                                     break
-                            yield await create_waiting_chunk(get_waiting_message(first_tool_name), request.model)
+                            yield create_waiting_chunk(get_waiting_message(first_tool_name), request.model)
 
                             yield create_stop_chunk(request.model)
                             # Wait long enough for Agora TTS to finish speaking the waiting message

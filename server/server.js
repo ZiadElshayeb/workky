@@ -274,13 +274,23 @@ app.post("/api/llm/chat/completions", async (req, res) => {
     });
     if (upstream.body) {
       const { Readable } = await import("stream");
-      Readable.fromWeb(upstream.body).pipe(res);
+      const readable = Readable.fromWeb(upstream.body);
+      // Handle stream errors (e.g. Agora closes the connection during a long sleep)
+      // without crashing the Node process.
+      readable.on("error", (err) => {
+        console.warn("LLM proxy stream closed early:", err.message);
+        if (!res.writableEnded) res.end();
+      });
+      res.on("close", () => readable.destroy());
+      readable.pipe(res);
     } else {
       res.end();
     }
   } catch (err) {
     console.error("LLM proxy error:", err.message);
-    res.status(502).json({ error: "LLM proxy failed", detail: err.message });
+    if (!res.headersSent) {
+      res.status(502).json({ error: "LLM proxy failed", detail: err.message });
+    }
   }
 });
 
