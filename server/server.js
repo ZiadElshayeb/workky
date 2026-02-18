@@ -21,6 +21,8 @@ const TTS_API_KEY = process.env.TTS_API_KEY;
 const STT_API_KEY = process.env.STT_API_KEY;
 const TTS_REGION = process.env.TTS_REGION || "eastus";
 const CUSTOM_LLM_URL = (process.env.CUSTOM_LLM_URL || "http://localhost:8000/chat/completions").trim();
+// Public-facing URL of this server — used so Agora (external) can reach our LLM proxy
+const PUBLIC_URL = (process.env.PUBLIC_URL || "").trim();
 
 // ─── Google OAuth credentials ─────────────────────────────────────────
 let GOOGLE_CLIENT_ID = (process.env.GOOGLE_CLIENT_ID || "").trim();
@@ -251,6 +253,35 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
+// ─── Custom LLM proxy — Agora calls this public endpoint, we forward internally ─
+app.post("/api/llm/chat/completions", async (req, res) => {
+  try {
+    const upstream = await fetch(CUSTOM_LLM_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(req.headers["authorization"] ? { Authorization: req.headers["authorization"] } : {}),
+      },
+      body: JSON.stringify(req.body),
+    });
+    res.status(upstream.status);
+    upstream.headers.forEach((v, k) => {
+      if (!["content-encoding", "transfer-encoding", "connection"].includes(k.toLowerCase())) {
+        res.setHeader(k, v);
+      }
+    });
+    if (upstream.body) {
+      const { Readable } = await import("stream");
+      Readable.fromWeb(upstream.body).pipe(res);
+    } else {
+      res.end();
+    }
+  } catch (err) {
+    console.error("LLM proxy error:", err.message);
+    res.status(502).json({ error: "LLM proxy failed", detail: err.message });
+  }
+});
+
 // ─── Agent event log (SSE broadcast to frontend) ─────────────────────
 const agentLogClients = new Set();
 const agentLogBuffer = []; // Last 50 events for late-joiners
@@ -478,7 +509,7 @@ app.post("/api/start-agent", async (req, res) => {
         enable_string_uid: false,
         idle_timeout: 120,
         llm: {
-          url: CUSTOM_LLM_URL,
+          url: PUBLIC_URL ? `${PUBLIC_URL}/api/llm/chat/completions` : CUSTOM_LLM_URL,
           api_key: LLM_API_KEY,
           system_messages: [
             { role: "system", content: buildSystemPrompt(loadBusinessConfig()) },
