@@ -293,11 +293,11 @@ async def create_chat_completion(request: ChatCompletionRequest):
                             # Flush the waiting text as its own packet BEFORE the stop signal.
                             # Without this sleep both chunks arrive in the same TCP frame and
                             # Agora processes the stop before feeding the text to TTS.
-                            await asyncio.sleep(0.3)
-                            yield create_stop_chunk(request.model)
+                            # await asyncio.sleep(0.3)
+                            # yield create_stop_chunk(request.model)
                             # Wait long enough for Agora TTS to finish speaking the waiting message
                             # before the tool result arrives and triggers the next response.
-                            await asyncio.sleep(4)
+                            await asyncio.sleep(3)
                         for tc in delta.tool_calls:
                             idx = tc.index
                             if idx not in collected_tool_calls:
